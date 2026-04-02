@@ -1,0 +1,26 @@
+# --- System Files ---
+.DS_Store
+Thumbs.db
+
+# --- Development Tools ---
+.vscode/
+.idea/
+*.log
+
+# --- Frontend / Web ---
+# If you eventually use npm/node
+node_modules/
+dist/
+build/
+
+# --- Data & Security ---
+# This prevents your local data blobs or test JSONs from being overwritten on GitHub
+data/temp_blobs/
+config.env
+.env
+secret_keys.txt
+
+# --- OS specific ---
+# Any local cache or temporary files
+*.tmp
+*.bak
