@@ -1,26 +1,25 @@
-# --- System Files ---
+# --- System & OS Files ---
 .DS_Store
 Thumbs.db
+*.tmp
+*.bak
 
-# --- Development Tools ---
+# --- VS Code & IDEs ---
 .vscode/
 .idea/
 *.log
 
-# --- Frontend / Web ---
-# If you eventually use npm/node
+# --- Frontend (Future-proofing) ---
 node_modules/
 dist/
 build/
 
-# --- Data & Security ---
-# This prevents your local data blobs or test JSONs from being overwritten on GitHub
-data/temp_blobs/
-config.env
+# --- Data & Security (Crucial for Vercel) ---
+# This ensures your local JSON/Blob tests don't clutter GitHub
+data/
 .env
+config.env
 secret_keys.txt
 
-# --- OS specific ---
-# Any local cache or temporary files
-*.tmp
-*.bak
+# --- Vercel Specific ---
+.vercel/
