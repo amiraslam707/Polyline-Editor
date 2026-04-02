@@ -23,3 +23,4 @@ secret_keys.txt
 
 # --- Vercel Specific ---
 .vercel/
+.vercel
