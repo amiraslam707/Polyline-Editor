@@ -469,5 +469,5 @@ This project was created for academic purposes. Feel free to study, fork, or ref
 
 ---
 
-*Built with ❤️ using nothing but HTML, CSS, and vanilla JavaScript.*
+*Built with , using nothing but HTML, CSS, and vanilla JavaScript.*
 
