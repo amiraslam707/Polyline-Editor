@@ -112,8 +112,8 @@
 <div id="ribbon">
   <section class="rg">
     <div class="rgInner">
-      <button class="rbig"><svg viewBox="0 0 28 28"><rect x="10" y="5" width="14" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 8H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 5h4v3h-4z" fill="currentColor" opacity=".45"/></svg>Paste</button>
-      <div class="rcol"><button class="rsm">✂ Cut</button><button class="rsm">⎘ Copy</button></div>
+      <button class="rbig" onclick="pasteClipboard()" title="Paste (Ctrl+V)"><svg viewBox="0 0 28 28"><rect x="10" y="5" width="14" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 8H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 5h4v3h-4z" fill="currentColor" opacity=".45"/></svg>Paste</button>
+      <div class="rcol"><button class="rsm" onclick="copySelection()">✂ Cut</button><button class="rsm" onclick="copySelection()">⎘ Copy</button></div>
     </div><div class="rl">Clipboard</div>
   </section>
   <div class="rdiv"></div>
@@ -279,41 +279,39 @@
       <canvas id="gizmoCanvas" width="80" height="80"></canvas>
     </div>
 
-    <!-- Axis legend -->
+    <!-- Axis legend — correct names matching 2D canvas -->
     <div id="axisLegend">
-      <div class="axLegRow"><span class="axDot" style="background:#ff4444;"></span><span>X — horizontal &nbsp; (set by drawing on 2D canvas)</span></div>
-      <div class="axLegRow"><span class="axDot" style="background:#44ff88;"></span><span>Y — depth / extrusion &nbsp; (slider below, or ↑↓ keys)</span></div>
-      <div class="axLegRow"><span class="axDot" style="background:#4488ff;"></span><span>Z — vertical &nbsp; (set by drawing on 2D canvas)</span></div>
-      <div class="axLegRow" style="color:#3a5a78;font-size:10px;margin-top:2px;">In Begin mode: click the floor to place points · Double-click to finish</div>
+      <div class="axLegRow"><span class="axDot" style="background:#ff4444;"></span><span>X — horizontal &nbsp;(same as X on 2D canvas)</span></div>
+      <div class="axLegRow"><span class="axDot" style="background:#4488ff;"></span><span>Y — vertical &nbsp;(same as Y on 2D canvas)</span></div>
+      <div class="axLegRow"><span class="axDot" style="background:#44ff88;"></span><span>Z — depth / extrusion &nbsp;(use slider below to push point in/out)</span></div>
+      <div class="axLegRow" style="color:#3a5a78;font-size:10px;margin-top:2px;">Begin mode: click floor to place points · Double-click to finish</div>
     </div>
 
-    <!-- Point editor -->
+    <!-- Vertical resize handle — drag to make the 3D canvas taller or shorter -->
+    <div id="vertResizeHandle" title="Drag up/down to resize 3D canvas height">
+      <div class="vertGrip"></div>
+    </div>
+
+    <!-- Z-depth slider — always visible, no popup, no info panel -->
     <div id="pointEditor" style="display:none;">
-      <div class="pe3Coords">
-        <div class="pe3Title">Selected: <span id="peSelLabel">—</span></div>
-        <div class="pe3Grid">
-          <div class="pe3Cell" style="border-color:#ff4444;"><span class="pe3Axis" style="color:#ff4444;">X</span><span class="pe3Val" id="peX">0</span><span class="pe3Sub">horizontal</span></div>
-          <div class="pe3Cell" style="border-color:#44ee88;background:#0a1f10;"><span class="pe3Axis" style="color:#44ee88;">Y</span><span class="pe3Val" id="peY">0</span><span class="pe3Sub">depth ← edit ↓</span></div>
-          <div class="pe3Cell" style="border-color:#4488ff;"><span class="pe3Axis" style="color:#4488ff;">Z</span><span class="pe3Val" id="peZ">0</span><span class="pe3Sub">vertical</span></div>
-        </div>
-        <div class="pe3Note">X &amp; Z follow where you placed the point. Y (depth) is edited with the slider.</div>
-      </div>
-      <div class="peRow">
-        <label class="peLabel">Y Depth</label>
-        <input type="range" id="zSlider3D" min="-400" max="400" value="0" oninput="onZSlider(this.value)">
-        <input type="number" id="zInput3D" value="0" min="-400" max="400" style="width:64px;" oninput="onZInput(this.value)">
-      </div>
-      <div class="peRow" style="gap:5px;flex-wrap:wrap;">
-        <button class="peBtn" onclick="nudgeZ(-10)">−10</button>
-        <button class="peBtn" onclick="nudgeZ(-1)">−1</button>
-        <button class="peBtn" onclick="nudgeZ(1)">+1</button>
-        <button class="peBtn" onclick="nudgeZ(10)">+10</button>
-        <button class="peBtn danger" onclick="deleteSelected3D()">🗑 Delete pt</button>
-      </div>
-      <div class="peRow" style="margin-top:2px;">
-        <label class="peLabel">All pts → Y:</label>
-        <input type="number" id="polylineZInput" value="0" style="width:64px;" oninput="setPolylineY(+this.value)">
-      </div>
+      <!-- hidden IDs kept for JS compatibility -->
+      <span id="peSelLabel" style="display:none;"></span>
+      <span id="peX" style="display:none;"></span>
+      <span id="peY" style="display:none;"></span>
+      <span id="peZ" style="display:none;"></span>
+      <input id="polylineZInput" type="number" value="0" style="display:none;" oninput="setPolylineY(+this.value)">
+    </div>
+
+    <!-- Z slider — always shown at bottom of 3D panel, no popup -->
+    <div id="zDepthBar">
+      <label class="peLabel">Z Depth</label>
+      <input type="range" id="zSlider3D" min="-400" max="400" value="0" oninput="onZSlider(this.value)">
+      <input type="number" id="zInput3D" value="0" min="-400" max="400" style="width:64px;" oninput="onZInput(this.value)">
+      <button class="peBtn" onclick="nudgeZ(-10)" title="Decrease depth by 10">−10</button>
+      <button class="peBtn" onclick="nudgeZ(-1)"  title="Decrease depth by 1">−1</button>
+      <button class="peBtn" onclick="nudgeZ(1)"   title="Increase depth by 1">+1</button>
+      <button class="peBtn" onclick="nudgeZ(10)"  title="Increase depth by 10">+10</button>
+      <button class="peBtn danger" onclick="deleteSelected3D()" title="Delete selected point">🗑</button>
     </div>
 
     <!-- Camera info -->
@@ -321,7 +319,7 @@
       <span>Az: <b id="camTheta">45°</b></span>
       <span>El: <b id="camPhi">22°</b></span>
       <span>Dist: <b id="camDist">1100</b></span>
-      <span style="color:#253a50;margin-left:auto;font-size:10px;">↑↓ nudge Y ±1 &nbsp; Shift+↑↓ = ±10</span>
+      <span style="color:#253a50;margin-left:auto;font-size:10px;">Click point → drag slider · ↑↓ nudge · Shift+↑↓ = ±10</span>
     </div>
   </div>
 </div>

@@ -38,16 +38,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
 @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#f3f3f3;--surface:#fff;--border:#e0e0e0;--blue:#0078d4;--blue-h:#106ebe;--blue-bg:#ddeeff;--text:#1a1a1a;--muted:#666;--font:'Segoe UI',system-ui,sans-serif;--radius:6px;}
@@ -112,7 +102,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:var(--font);font-si
 body{display:flex;flex-direction:column;height:100vh;}
 #splitArea{flex:1;display:flex;min-height:0;overflow:hidden;}
 #editorSide{flex:1;display:flex;flex-direction:column;min-width:200px;overflow:hidden;}
-#threeDSide{width:500px;flex-shrink:0;display:flex;flex-direction:column;min-width:260px;background:#111825;border-left:none;overflow:hidden;}
+#threeDSide{width:500px;flex-shrink:0;display:flex;flex-direction:column;min-width:260px;background:#111825;border-left:none;overflow:hidden;min-height:200px;}
 
 /* ── RESIZE SPLITTER ─── */
 #splitHandle{
@@ -156,9 +146,36 @@ body{display:flex;flex-direction:column;height:100vh;}
 .tdModBtn.active{background:#1a4070;border-color:#2a6090;color:#88ddff;font-weight:600;}
 .tdStatusTxt{font-size:10px;color:#2a4a68;white-space:nowrap;}
 
-#threeDCanvasWrap{flex:1;position:relative;min-height:0;overflow:hidden;}
+#threeDCanvasWrap{position:relative;min-height:120px;overflow:hidden;height:340px;flex-shrink:0;}
 #canvas3D{width:100%;height:100%;display:block;}
 #gizmoCanvas{position:absolute;top:10px;right:10px;background:rgba(5,12,30,.75);border:1px solid rgba(80,120,200,.3);border-radius:8px;}
+
+/* Vertical resize handle between canvas and bottom controls */
+#vertResizeHandle{
+  height:10px;flex-shrink:0;background:#1a2a3a;
+  cursor:ns-resize;display:flex;align-items:center;justify-content:center;
+  transition:background .12s;border-top:1px solid #1e3050;border-bottom:1px solid #1e3050;
+}
+#vertResizeHandle:hover,#vertResizeHandle.dragging{background:#0078d4;}
+.vertGrip{
+  width:36px;height:3px;
+  background:rgba(255,255,255,.25);border-radius:2px;
+}
+#vertResizeHandle:hover .vertGrip,#vertResizeHandle.dragging .vertGrip{background:rgba(255,255,255,.8);}
+
+/* Always-visible Z depth bar */
+#zDepthBar{
+  display:flex;align-items:center;gap:6px;padding:8px 12px;
+  background:#0c1520;border-top:1px solid #1a2840;flex-shrink:0;
+  flex-wrap:wrap;
+}
+#zDepthBar .peLabel{font-size:11px;color:#4a6888;min-width:50px;}
+#zDepthBar #zSlider3D{flex:1;min-width:60px;accent-color:#0078d4;}
+#zDepthBar #zInput3D{padding:3px 5px;border:1px solid #1e3050;border-radius:4px;background:#060e18;color:#c8e0f8;font-size:12px;width:58px;}
+#zDepthBar .peBtn{padding:3px 8px;border:1px solid #1e3050;border-radius:4px;background:#10202e;color:#7ab0d8;cursor:pointer;font-size:11px;}
+#zDepthBar .peBtn:hover{background:#182840;color:#c8e8ff;}
+#zDepthBar .peBtn.danger{border-color:#5a2020;background:#1a0808;color:#ff8888;}
+#zDepthBar .peBtn.danger:hover{background:#2a1010;}
 
 #axisLegend{background:#0c1520;border-top:1px solid #1a2840;padding:7px 14px;display:flex;flex-direction:column;gap:3px;flex-shrink:0;}
 .axLegRow{display:flex;align-items:center;gap:8px;font-size:10px;color:#6a8caa;}

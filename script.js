@@ -269,6 +269,9 @@ let textPos       = null;
 let shapeStart    = null;
 let snapshot      = null;
 let show3D        = false;
+let selStart      = null;   // for SELECT rubber-band
+let selRect       = null;   // {x,y,w,h} current selection
+let clipboard     = null;   // ImageData for paste
 
 // ── COLOR PALETTE ─────────────────────────────────────────────
 const PALETTE = [
@@ -365,13 +368,21 @@ function redrawAll(){
 }
 function draw2DAxisOverlay(){
   ctx.save();const W=canvas.width,H=canvas.height,ox=40,oy=H-40;
-  ctx.strokeStyle='rgba(220,50,50,0.5)';ctx.lineWidth=1.5;ctx.setLineDash([7,5]);ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(W-16,oy);ctx.stroke();ctx.setLineDash([]);
+  // X axis (red, horizontal)
+  ctx.strokeStyle='rgba(220,50,50,0.5)';ctx.lineWidth=1.5;ctx.setLineDash([7,5]);
+  ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(W-16,oy);ctx.stroke();ctx.setLineDash([]);
   ctx.fillStyle='rgba(220,50,50,0.7)';ctx.beginPath();ctx.moveTo(W-8,oy);ctx.lineTo(W-22,oy-5);ctx.lineTo(W-22,oy+5);ctx.closePath();ctx.fill();
-  ctx.font='bold 12px Segoe UI,sans-serif';ctx.fillStyle='rgba(200,40,40,0.8)';ctx.fillText('X  (horizontal →)',W-135,oy-9);
-  ctx.strokeStyle='rgba(30,90,220,0.5)';ctx.lineWidth=1.5;ctx.setLineDash([7,5]);ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(ox,12);ctx.stroke();ctx.setLineDash([]);
+  ctx.font='bold 12px Segoe UI,sans-serif';ctx.fillStyle='rgba(200,40,40,0.8)';ctx.fillText('X  →',W-42,oy-9);
+  // Y axis (blue, vertical)
+  ctx.strokeStyle='rgba(30,90,220,0.5)';ctx.lineWidth=1.5;ctx.setLineDash([7,5]);
+  ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(ox,12);ctx.stroke();ctx.setLineDash([]);
   ctx.fillStyle='rgba(30,90,220,0.7)';ctx.beginPath();ctx.moveTo(ox,6);ctx.lineTo(ox-5,20);ctx.lineTo(ox+5,20);ctx.closePath();ctx.fill();
-  ctx.font='bold 12px Segoe UI,sans-serif';ctx.fillStyle='rgba(20,80,210,0.8)';ctx.save();ctx.translate(ox-15,oy-55);ctx.rotate(-Math.PI/2);ctx.fillText('Y  (vertical ↑)',0,0);ctx.restore();
-  ctx.font='bold 11px Segoe UI,sans-serif';ctx.fillStyle='rgba(10,160,70,0.75)';ctx.fillText('Z = depth  (edit in 3D view)',W-200,H-11);
+  ctx.font='bold 12px Segoe UI,sans-serif';ctx.fillStyle='rgba(20,80,210,0.8)';
+  ctx.save();ctx.translate(ox-15,oy-40);ctx.rotate(-Math.PI/2);ctx.fillText('Y  ↑',0,0);ctx.restore();
+  // Z = depth label (green, bottom-right) — same name as 3D panel
+  ctx.font='bold 11px Segoe UI,sans-serif';ctx.fillStyle='rgba(10,180,70,0.8)';
+  ctx.fillText('Z = depth  (edit in 3D view with slider)',W-260,H-11);
+  // Origin dot
   ctx.beginPath();ctx.arc(ox,oy,5,0,Math.PI*2);ctx.fillStyle='rgba(80,80,80,0.45)';ctx.fill();
   ctx.font='9px Segoe UI,sans-serif';ctx.fillStyle='rgba(80,80,80,0.65)';ctx.fillText('(0,0)',ox+8,oy+13);
   ctx.restore();
@@ -434,8 +445,10 @@ canvas.addEventListener('mousedown',e=>{
   if(mode==='INSERTING'){const s=findSegment(mp);if(s){saveState();allPolylines[s.pi].points.splice(s.after+1,0,{x:mp.x,y:mp.y,z:0});syncBoth();}return;}
   if(mode==='FILL'){saveState();floodFill(Math.round(mp.x),Math.round(mp.y),fgColor);return;}
   if(mode==='TEXT'){openTextAt(mp);return;}
+  if(mode==='SELECT'){selStart=mp;snapshot=ctx.getImageData(0,0,canvas.width,canvas.height);return;}
   saveState();snapshot=ctx.getImageData(0,0,canvas.width,canvas.height);shapeStart=mp;
   if(mode==='PENCIL'||mode==='ERASING'){ctx.beginPath();ctx.moveTo(mp.x,mp.y);}
+  if(mode==='BRUSH'){applyBrush(mp);}  // paint on first click too
 });
 canvas.addEventListener('mousemove',e=>{
   const mp=getPos(e);document.getElementById('sbCoords').textContent=`${Math.round(mp.x)}, ${Math.round(mp.y)} px`;
@@ -443,17 +456,47 @@ canvas.addEventListener('mousemove',e=>{
   if(mode==='MOVING'&&selectedPoint){const pt=allPolylines[selectedPoint.pi].points[selectedPoint.ti];pt.x=mp.x;pt.y=mp.y;syncBoth();return;}
   if((mode==='PENCIL'||mode==='ERASING')&&shapeStart){ctx.lineTo(mp.x,mp.y);ctx.strokeStyle=mode==='ERASING'?bgColor:fgColor;ctx.lineWidth=mode==='ERASING'?lineW*8:lineW;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();ctx.beginPath();ctx.moveTo(mp.x,mp.y);return;}
   if(mode==='BRUSH'){applyBrush(mp);return;}
+  if(mode==='SELECT'&&selStart){
+    // draw rubber-band selection rectangle
+    if(snapshot)ctx.putImageData(snapshot,0,0);
+    const x=Math.min(selStart.x,mp.x),y=Math.min(selStart.y,mp.y);
+    const w=Math.abs(mp.x-selStart.x),h=Math.abs(mp.y-selStart.y);
+    ctx.save();ctx.strokeStyle='#0078d4';ctx.lineWidth=1;ctx.setLineDash([5,4]);
+    ctx.strokeRect(x,y,w,h);ctx.fillStyle='rgba(0,120,212,0.08)';ctx.fillRect(x,y,w,h);
+    ctx.restore();return;
+  }
   const SH=['LINE','RECT','ELLIPSE','TRIANGLE','ARROW','STAR','DIAMOND','HEART','HEXAGON'];
   if(SH.includes(mode)&&snapshot&&shapeStart){ctx.putImageData(snapshot,0,0);redrawPolylines();drawShape(shapeStart,mp);}
 });
 canvas.addEventListener('mouseup',e=>{
   const mp=getPos(e);isMouseDown=false;selectedPoint=null;
+  if(mode==='SELECT'&&selStart){
+    const x=Math.min(selStart.x,mp.x),y=Math.min(selStart.y,mp.y);
+    const w=Math.abs(mp.x-selStart.x),h=Math.abs(mp.y-selStart.y);
+    if(w>4&&h>4){selRect={x:Math.round(x),y:Math.round(y),w:Math.round(w),h:Math.round(h)};clipboard=ctx.getImageData(selRect.x,selRect.y,selRect.w,selRect.h);updateStatus(`Selected ${Math.round(w)}×${Math.round(h)}px — Ctrl+C to copy, Ctrl+V to paste`);}
+    else{selRect=null;if(snapshot)ctx.putImageData(snapshot,0,0);}
+    selStart=null;snapshot=null;return;
+  }
   const SH=['LINE','RECT','ELLIPSE','TRIANGLE','ARROW','STAR','DIAMOND','HEART','HEXAGON'];
   if(SH.includes(mode)&&shapeStart){if(snapshot)ctx.putImageData(snapshot,0,0);redrawPolylines();drawShape(shapeStart,mp);shapeStart=null;snapshot=null;}
   if(mode==='PENCIL'||mode==='ERASING'||mode==='BRUSH')shapeStart=null;
 });
 canvas.addEventListener('dblclick',e=>{
   if(mode==='DRAWING'&&currentPolyline&&currentPolyline.points.length>1){currentPolyline.points.pop();currentPolyline=null;syncBoth();updateStatus('Polyline complete — press B to start a new one');}
+});
+
+// ── COPY / PASTE ──────────────────────────────────────────────
+function copySelection(){if(selRect&&clipboard){updateStatus('Copied '+selRect.w+'×'+selRect.h+'px to clipboard');}}
+function pasteClipboard(){
+  if(!clipboard)return;
+  saveState();
+  ctx.putImageData(clipboard,selRect?selRect.x:20,selRect?selRect.y:20);
+  updateStatus('Pasted');
+}
+// Hook up ribbon buttons
+document.querySelectorAll('.rsm').forEach(btn=>{
+  if(btn.textContent.trim().startsWith('✂ Cut')){btn.onclick=()=>{if(selRect&&clipboard){saveState();ctx.fillStyle=bgColor;ctx.fillRect(selRect.x,selRect.y,selRect.w,selRect.h);updateStatus('Cut');}};}
+  if(btn.textContent.trim().startsWith('⎘ Copy')){btn.onclick=copySelection;}
 });
 
 // ── IMAGE OPS ─────────────────────────────────────────────────
@@ -512,8 +555,37 @@ document.addEventListener('mouseup', () => {
   document.body.style.userSelect = '';
 });
 
-// ═══════════════════════════════════════════════════════════════
-//  3D ENGINE
+// ── VERTICAL RESIZE (3D canvas height) ───────────────────────
+let vertDragging=false, vertStartY=0, vertStartH=0;
+document.addEventListener('DOMContentLoaded', ()=>{
+  const vr = document.getElementById('vertResizeHandle');
+  if(!vr) return;
+  vr.addEventListener('mousedown', e=>{
+    vertDragging=true; vertStartY=e.clientY;
+    const wrap=document.getElementById('threeDCanvasWrap');
+    vertStartH=wrap.offsetHeight;
+    vr.classList.add('dragging');
+    document.body.style.cursor='ns-resize';
+    document.body.style.userSelect='none';
+    e.preventDefault();
+  });
+});
+document.addEventListener('mousemove', e=>{
+  if(!vertDragging) return;
+  const delta=e.clientY-vertStartY;
+  const newH=Math.max(80, vertStartH+delta);
+  const wrap=document.getElementById('threeDCanvasWrap');
+  if(wrap){ wrap.style.height=newH+'px'; }
+  if(view3d){ view3d.resize(); view3d.render(); }
+});
+document.addEventListener('mouseup', ()=>{
+  if(!vertDragging) return;
+  vertDragging=false;
+  const vr=document.getElementById('vertResizeHandle');
+  if(vr) vr.classList.remove('dragging');
+  document.body.style.cursor='';
+  document.body.style.userSelect='';
+});
 // ═══════════════════════════════════════════════════════════════
 class View3D {
   constructor(cvs) {
@@ -655,8 +727,8 @@ class View3D {
           else if(item.isHL){cg.addColorStop(0,'#cceeFF');cg.addColorStop(1,'#3399ee');}
           else{cg.addColorStop(0,`rgb(${Math.min(255,r+90)},${Math.min(255,g+55)},${Math.min(255,b+70)})`);cg.addColorStop(1,css);}
           c.fillStyle=cg;c.strokeStyle=item.isSel?'#ffffff':'rgba(255,255,255,.8)';c.lineWidth=item.isSel?2.5:1.5;c.fill();c.stroke();
-          if(item.isSel){c.font='bold 11px Segoe UI,monospace';const label=`X:${Math.round(pt.x)}  Y(depth):${Math.round(z)}  Z:${Math.round(pt.y||0)}`;const tw=c.measureText(label).width,lx=p.sx+14,ly=p.sy-8;c.fillStyle='rgba(0,0,0,.8)';c.fillRect(lx-4,ly-2,tw+10,18);c.fillStyle='#ffee88';c.fillText(label,lx,ly+12);}
-          else if(z!==0){c.font='bold 9px Segoe UI,sans-serif';const zl=`y${z>0?'+':''}${z}`,tw2=c.measureText(zl).width;c.fillStyle='rgba(0,0,0,.55)';c.fillRect(p.sx+radius+2,p.sy-8,tw2+4,12);c.fillStyle=css;c.fillText(zl,p.sx+radius+4,p.sy+1);}
+          if(item.isSel){c.font='bold 11px Segoe UI,monospace';const label=`X:${Math.round(pt.x)}  Y:${Math.round(pt.y||0)}  Z(depth):${Math.round(z)}`;const tw=c.measureText(label).width,lx=p.sx+14,ly=p.sy-8;c.fillStyle='rgba(0,0,0,.8)';c.fillRect(lx-4,ly-2,tw+10,18);c.fillStyle='#ffee88';c.fillText(label,lx,ly+12);}
+          else if(z!==0){c.font='bold 9px Segoe UI,sans-serif';const zl=`Z${z>0?'+':''}${z}`,tw2=c.measureText(zl).width;c.fillStyle='rgba(0,0,0,.55)';c.fillRect(p.sx+radius+2,p.sy-8,tw2+4,12);c.fillStyle=css;c.fillText(zl,p.sx+radius+4,p.sy+1);}
           break;
         }
       }
@@ -679,7 +751,12 @@ class View3D {
   }
   drawAxes(c){
     const o={x:this.lookAt.x,y:0,z:this.lookAt.z},len=160;
-    const axes=[{end:{x:o.x+len,y:0,z:o.z},color:'#ff4444',label:'X'},{end:{x:o.x,y:len,z:o.z},color:'#44ff88',label:'Y (depth)'},{end:{x:o.x,y:0,z:o.z+len},color:'#4488ff',label:'Z'}];
+    // X=red(horizontal), Z=green(depth/extrusion — the slider), Y=blue(vertical)
+    const axes=[
+      {end:{x:o.x+len,y:0,z:o.z},  color:'#ff4444',label:'X (horiz)'},
+      {end:{x:o.x,y:len,z:o.z},    color:'#44ff88',label:'Z (depth)'},
+      {end:{x:o.x,y:0,z:o.z+len},  color:'#4488ff',label:'Y (vertical)'},
+    ];
     const po=this.project(o.x,o.y,o.z);if(!po)return;c.save();c.lineWidth=3;
     axes.forEach(ax=>{const pe=this.project(ax.end.x,ax.end.y,ax.end.z);if(!pe)return;c.beginPath();c.moveTo(po.sx,po.sy);c.lineTo(pe.sx,pe.sy);c.strokeStyle=ax.color;c.lineCap='round';c.stroke();const ang=Math.atan2(pe.sy-po.sy,pe.sx-po.sx),hs=10;c.beginPath();c.moveTo(pe.sx,pe.sy);c.lineTo(pe.sx-hs*Math.cos(ang-.4),pe.sy-hs*Math.sin(ang-.4));c.lineTo(pe.sx-hs*Math.cos(ang+.4),pe.sy-hs*Math.sin(ang+.4));c.closePath();c.fillStyle=ax.color;c.fill();c.font='bold 12px Segoe UI,sans-serif';const tw=c.measureText(ax.label).width;c.fillStyle='rgba(0,0,0,.6)';c.fillRect(pe.sx+7,pe.sy-13,tw+6,16);c.fillStyle=ax.color;c.fillText(ax.label,pe.sx+10,pe.sy);});
     c.restore();
@@ -688,7 +765,7 @@ class View3D {
     const g=this.gCtx,S=80,C=40;g.clearRect(0,0,S,S);g.fillStyle='rgba(5,12,28,.85)';g.fillRect(0,0,S,S);
     const pG=(x,y,z)=>{const cT=Math.cos(-this.theta),sT=Math.sin(-this.theta);const rx=x*cT-z*sT,ry=y,rz=x*sT+z*cT;const cP=Math.cos(-this.phi),sP=Math.sin(-this.phi);const fx=rx,fy=ry*cP-rz*sP,fz=ry*sP+rz*cP+3;if(fz<.1)return{sx:C,sy:C};const sc=26/fz;return{sx:C+fx*sc,sy:C-fy*sc};};
     const o=pG(0,0,0);
-    [{v:[1,0,0],c:'#ff5555',l:'X'},{v:[0,1,0],c:'#55ff88',l:'Y'},{v:[0,0,1],c:'#5599ff',l:'Z'}].forEach(ax=>{const e=pG(...ax.v);g.beginPath();g.moveTo(o.sx,o.sy);g.lineTo(e.sx,e.sy);g.strokeStyle=ax.c;g.lineWidth=2.5;g.lineCap='round';g.stroke();g.beginPath();g.arc(e.sx,e.sy,4,0,Math.PI*2);g.fillStyle=ax.c;g.fill();g.font='bold 9px sans-serif';g.fillStyle=ax.c;g.fillText(ax.l,e.sx+5,e.sy+3);});
+    [{v:[1,0,0],c:'#ff5555',l:'X'},{v:[0,1,0],c:'#55ff88',l:'Z'},{v:[0,0,1],c:'#5599ff',l:'Y'}].forEach(ax=>{const e=pG(...ax.v);g.beginPath();g.moveTo(o.sx,o.sy);g.lineTo(e.sx,e.sy);g.strokeStyle=ax.c;g.lineWidth=2.5;g.lineCap='round';g.stroke();g.beginPath();g.arc(e.sx,e.sy,4,0,Math.PI*2);g.fillStyle=ax.c;g.fill();g.font='bold 9px sans-serif';g.fillStyle=ax.c;g.fillText(ax.l,e.sx+5,e.sy+3);});
   }
 
   // ── Pick ────────────────────────────────────────────────────
@@ -697,28 +774,25 @@ class View3D {
 
   // ── Editor panel ────────────────────────────────────────────
   refreshEditor(){
+    // Update the always-visible Z slider — no popup ever
     if(!this.sel)return;
     const pt=allPolylines[this.sel.pi]?.points[this.sel.ti];if(!pt)return;
-    document.getElementById('peSelLabel').textContent=`Polyline ${this.sel.pi+1} · Point ${this.sel.ti+1}`;
-    document.getElementById('peX').textContent=Math.round(pt.x);
-    document.getElementById('peY').textContent=Math.round(pt.z||0);
-    document.getElementById('peZ').textContent=Math.round(pt.y||0);
-    document.getElementById('zSlider3D').value=pt.z||0;
-    document.getElementById('zInput3D').value=pt.z||0;
-    document.getElementById('polylineZInput').value=pt.z||0;
-    document.getElementById('pointEditor').style.display='flex';
+    const z=pt.z||0;
+    document.getElementById('zSlider3D').value=z;
+    document.getElementById('zInput3D').value=z;
   }
-  hideEditor(){this.sel=null;document.getElementById('pointEditor').style.display='none';redrawPolylines();this.render();}
+  hideEditor(){this.sel=null;redrawPolylines();this.render();}
 
   // ── Events ──────────────────────────────────────────────────
   bindEvents(){
     this.cvs.addEventListener('mousedown',e=>this.onMD(e));
     this.cvs.addEventListener('mousemove',e=>this.onMM(e));
     this.cvs.addEventListener('mouseup',  e=>this.onMU(e));
+    // Safety: release drag if mouse leaves canvas or lifts anywhere
+    document.addEventListener('mouseup',  ()=>{ this.dragPt=null; this.dragging=false; });
     this.cvs.addEventListener('dblclick', e=>this.onDbl(e));
     this.cvs.addEventListener('wheel',    e=>this.onWheel(e),{passive:false});
     this.cvs.addEventListener('contextmenu',e=>e.preventDefault());
-    // Make canvas focusable for keyboard
     this.cvs.setAttribute('tabindex','0');
     this.cvs.addEventListener('keydown',  e=>this.onKey(e));
   }
@@ -767,9 +841,12 @@ class View3D {
     if(this.mode3D==='MOVING'){
       const hit=this.pickVertex(mx,my);
       if(hit){
-        saveState();this.sel=hit;this.dragPt=hit;this.dragLastPos={mx,my};
+        saveState();this.sel=hit;this.dragPt=hit;
         this.refreshEditor();redrawPolylines();this.render();
-      }else{this.dragging=true;}
+      } else {
+        // No point hit — start orbit instead of accidentally moving
+        this.dragging=true;
+      }
       return;
     }
 
@@ -798,7 +875,12 @@ class View3D {
     this.lastMX=mx;this.lastMY=my;this.render();
   }
 
-  onMU(){this.dragging=false;this.dragPt=null;this.dragLastPos=null;}
+  onMU(e){
+    if(this.dragPt){
+      this.dragPt=null;
+    }
+    this.dragging=false;
+  }
 
   onDbl(e){
     if(this.mode3D==='DRAWING'&&this.current3DPoly){
@@ -856,14 +938,15 @@ function onZInput(val){document.getElementById('zSlider3D').value=val;applyYToSe
 function applyYToSelected(z){
   if(!view3d||!view3d.sel)return;
   const{pi,ti}=view3d.sel;allPolylines[pi].points[ti].z=z;
-  document.getElementById('peY').textContent=z;syncBoth();updateStatus(`Y depth: ${z}`);
+  syncBoth();updateStatus(`Z depth: ${z}`);
 }
 function nudgeZ(delta){
   if(!view3d||!view3d.sel)return;
   const{pi,ti}=view3d.sel,pt=allPolylines[pi].points[ti];
   pt.z=Math.max(-400,Math.min(400,(pt.z||0)+delta));
-  document.getElementById('zSlider3D').value=pt.z;document.getElementById('zInput3D').value=pt.z;document.getElementById('peY').textContent=pt.z;
-  syncBoth();updateStatus(`Y depth: ${pt.z}`);
+  document.getElementById('zSlider3D').value=pt.z;
+  document.getElementById('zInput3D').value=pt.z;
+  syncBoth();updateStatus(`Z depth: ${pt.z}`);
 }
 function setPolylineY(z){if(!view3d||!view3d.sel)return;const pl=allPolylines[view3d.sel.pi];if(!pl)return;saveState();pl.points.forEach(pt=>pt.z=z);syncBoth();}
 function deleteSelected3D(){if(!view3d||!view3d.sel)return;const{pi,ti}=view3d.sel;saveState();allPolylines[pi].points.splice(ti,1);view3d.hideEditor();syncBoth();}
@@ -898,6 +981,9 @@ window.addEventListener('keydown',e=>{
     else if(k==='3'){e.preventDefault();toggle3DPanel();}
     else if(k==='+'||k==='='){e.preventDefault();zoomIn();}
     else if(k==='-'){e.preventDefault();zoomOut();}
+    else if(k==='c'){e.preventDefault();copySelection();}
+    else if(k==='v'){e.preventDefault();pasteClipboard();}
+    else if(k==='a'){e.preventDefault();setActiveTool('SELECT');selStart={x:0,y:0};selRect={x:0,y:0,w:canvas.width,h:canvas.height};clipboard=ctx.getImageData(0,0,canvas.width,canvas.height);redrawAll();ctx.save();ctx.strokeStyle='#0078d4';ctx.lineWidth=1;ctx.setLineDash([5,4]);ctx.strokeRect(0,0,canvas.width,canvas.height);ctx.restore();updateStatus('All selected');selStart=null;}
   }
   // Global arrow keys for Y nudge when 3D sel exists
   if(show3D&&view3d&&view3d.sel&&document.activeElement!==document.getElementById('canvas3D')){
